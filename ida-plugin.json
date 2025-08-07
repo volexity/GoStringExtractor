@@ -1,0 +1,8 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "GoStringExtractor",
+    "entryPoint": "gostringextractor_ida.py",
+    "version": "1.0.0"
+  }
+}
