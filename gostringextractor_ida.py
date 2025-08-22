@@ -11,7 +11,7 @@ import ida_bytes
 import ida_idaapi
 from idaapi import BADADDR
 from ida_nalt import STRTYPE_C
-from ida_kernwin import Form
+from ida_kernwin import Form, warning
 from ida_funcs import get_func_name
 from ida_xref import get_first_dref_to
 from idautils import DataRefsTo, Functions
@@ -149,13 +149,19 @@ def find_segments() -> list[segment]:
         list[segment]: List of data segments to search
     """
     segs_to_search = []
+    all_segs = []
 
     s = get_first_seg()
     while s is not None:
         name = get_segm_name(s)
+        all_segs.append(segment(name,s.start_ea,s.end_ea))
         if ('rodata' in name) or ('data' in name):
             segs_to_search.append(segment(name,s.start_ea,s.end_ea))
         s = get_next_seg(s.start_ea)
+
+    if not segs_to_search:
+        print("Could not filter segments by name, searching all segments")
+        return all_segs
 
     return segs_to_search
 
@@ -398,29 +404,33 @@ def main() -> None:
     """Entry point to spawn GUI and then collect + dump all strings"""
     # Collect segments and look for "entersyscall" magic string
     segs = find_segments()
+    ea_match = None
     for seg in segs:
-        ea_match = search_for_magic(seg)
-        if ea_match is not None:
+        match = search_for_magic(seg)
+        if match is not None:
             seg_match = seg
+            ea_match = match
             break   # There should only be one non zero-terminated instance of
                     # the magic string in the binary.
-
-    packages = list(get_packages_from_functions())
-
-    f = CMainDialog()
-    f.Compile()
-    f.set_defaults(ea_match, packages)
-    ok = f.Execute()
-    if ok == 1:
-        # Filter strings when building
-        opts = f.get_options()
-        get_strings(opts, seg_match)
-    elif ok == 0:
-        # UI Canceled do nothing
-        pass
+    if ea_match is None:
+        warning("GoStringExtractor Error: Magic string not found")
     else:
-        raise(ValueError(f"Invalid 'ok' option: {ok}"))
-    f.Free()
+        packages = list(get_packages_from_functions())
+
+        f = CMainDialog()
+        f.Compile()
+        f.set_defaults(ea_match, packages)
+        ok = f.Execute()
+        if ok == 1:
+            # Filter strings when building
+            opts = f.get_options()
+            get_strings(opts, seg_match)
+        elif ok == 0:
+            # UI Canceled do nothing
+            pass
+        else:
+            raise(ValueError(f"Invalid 'ok' option: {ok}"))
+        f.Free()
 
 # IDA Pro Plugin boilerplate
 class GoStringExtractorPlugmod(ida_idaapi.plugmod_t):
